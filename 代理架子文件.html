@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mihomo 极简控制台</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: #121212;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden; /* 防止主页面滚动 */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部导航 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .import-btn {
+            background: transparent;
+            color: #00d2ff;
+            border: 1px solid #00d2ff;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .import-btn:active {
+            background: rgba(0, 210, 255, 0.1);
+        }
+
+        .title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #eee;
+        }
+
+        .placeholder {
+            width: 60px; /* 占位，让标题居中 */
+        }
+
+        /* 核心控制区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 20px;
+            gap: 50px;
+        }
+
+        /* 总开关 */
+        .switch-wrapper {
+            position: relative;
+            width: 140px;
+            height: 70px;
+        }
+
+        .switch-wrapper input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 70px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 56px;
+            width: 56px;
+            left: 7px;
+            bottom: 7px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        input:checked + .slider {
+            background-color: #00d2ff;
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.4);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(70px);
+        }
+
+        /* 当前节点卡片 */
+        .current-node-card {
+            width: 100%;
+            max-width: 350px;
+            background-color: #1e1e24;
+            padding: 20px;
+            border-radius: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            border: 1px solid #333;
+            transition: 0.2s;
+        }
+
+        .current-node-card:active {
+            background-color: #2a2a35;
+        }
+
+        .node-info .label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .node-info .name {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .arrow {
+            color: #666;
+            font-size: 20px;
+        }
+
+        /* === 节点选择侧滑页面 === */
+        .node-page {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #121212;
+            z-index: 100;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .node-page.show {
+            transform: translateY(0);
+        }
+
+        .page-header {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #222;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .page-header h2 {
+            font-size: 16px;
+            margin-left: 20px;
+        }
+
+        /* 节点列表 */
+        .node-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .node-item {
+            background-color: #1e1e24;
+            padding: 16px 20px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .node-item.selected {
+            border-color: #00d2ff;
+            background-color: rgba(0, 210, 255, 0.05);
+        }
+
+        .node-item .ping {
+            font-size: 13px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #222;
+        }
+        
+        .ping.good { color: #00e676; }
+        .ping.medium { color: #ffea00; }
+        .ping.bad { color: #ff5252; }
+
+    </style>
+</head>
+<body>
+
+    <!-- 顶部 -->
+    <div class="header">
+        <button class="import-btn" onclick="importSub()">导入订阅</button>
+        <div class="title">Mihomo</div>
+        <div class="placeholder"></div>
+    </div>
+
+    <!-- 主界面 -->
+    <div class="main-content">
+        <!-- 开关 -->
+        <div class="switch-wrapper">
+            <input type="checkbox" id="proxySwitch">
+            <label for="proxySwitch" class="slider"></label>
+        </div>
+
+        <!-- 当前节点 -->
+        <div class="current-node-card" onclick="openNodePage()">
+            <div class="node-info">
+                <div class="label">当前节点</div>
+                <div class="name" id="currentSelectedName">点击选择节点</div>
+            </div>
+            <div class="arrow">›</div>
+        </div>
+    </div>
+
+    <!-- 节点选择页面 (滑出) -->
+    <div class="node-page" id="nodePage">
+        <div class="page-header">
+            <button class="back-btn" onclick="closeNodePage()">
+                ‹ 返回
+            </button>
+            <h2>选择节点</h2>
+        </div>
+        
+        <div class="node-list" id="nodeListContainer">
+            <!-- 节点列表由 JS 动态生成 -->
+        </div>
+    </div>
+
+    <script>
+        // 模拟 mihomo 的节点数据
+        const mockNodes = [
+            { id: '1', name: '🇭🇰 香港 01 - IPLC', ping: 25 },
+            { id: '2', name: '🇭🇰 香港 02 - BGP', ping: 38 },
+            { id: '3', name: '🇯🇵 日本 01 - 软银', ping: 45 },
+            { id: '4', name: '🇸🇬 新加坡 01', ping: 80 },
+            { id: '5', name: '🇺🇸 美国 01 - 洛杉矶', ping: 160 },
+            { id: '6', name: '🇺🇸 美国 02 - 圣何塞', ping: 210 },
+            { id: '7', name: 'DIRECT', ping: 0, isDirect: true },
+            { id: '8', name: 'REJECT', ping: 0, isReject: true }
+        ];
+
+        let currentNodeId = null;
+        const switchEl = document.getElementById('proxySwitch');
+        const nodePageEl = document.getElementById('nodePage');
+        const currentNameEl = document.getElementById('currentSelectedName');
+        const nodeListContainer = document.getElementById('nodeListContainer');
+
+        // 1. 初始化：渲染节点列表
+        function renderNodes() {
+            nodeListContainer.innerHTML = '';
+            mockNodes.forEach(node => {
+                const el = document.createElement('div');
+                el.className = `node-item ${currentNodeId === node.id ? 'selected' : ''}`;
+                
+                let pingClass = 'good';
+                if (node.ping > 100) pingClass = 'bad';
+                else if (node.ping > 50) pingClass = 'medium';
+
+                el.innerHTML = `
+                    <span>${node.name}</span>
+                    ${node.ping > 0 ? `<span class="ping ${pingClass}">${node.ping} ms</span>` : ''}
+                `;
+                
+                el.onclick = () => selectNode(node.id, node.name);
+                nodeListContainer.appendChild(el);
+            });
+        }
+
+        // 2. 打开节点页
+        function openNodePage() {
+            nodePageEl.classList.add('show');
+        }
+
+        // 3. 关闭节点页
+        function closeNodePage() {
+            nodePageEl.classList.remove('show');
+        }
+
+        // 4. 选择节点
+        function selectNode(id, name) {
+            currentNodeId = id;
+            currentNameEl.textContent = name;
+            currentNameEl.style.color = '#00d2ff';
+            
+            // 重新渲染以更新选中状态
+            renderNodes();
+            // 关闭页面
+            closeNodePage();
+
+            // TODO: 对接真实后端 mihomo API
+            console.log(`[API 请求] 切换节点为: ${id}`);
+        }
+
+        // 5. 开关逻辑
+        switchEl.addEventListener('change', function() {
+            const isChecked = this.checked;
+            // TODO: 对接真实后端 mihomo API
+            console.log(`[API 请求] 代理已${isChecked ? '开启' : '关闭'}`);
+        });
+
+        // 6. 导入订阅
+        function importSub() {
+            const url = prompt('请输入订阅链接 (Clash/Mihomo YAML):');
+            if (url) {
+                console.log(`[API 请求] 导入订阅: ${url}`);
+                alert('订阅已导入，正在更新配置...');
+            }
+        }
+
+        // 初始渲染
+        renderNodes();
+
+        // 默认选中第一个节点
+        if(mockNodes.length > 0) {
+            selectNode(mockNodes[0].id, mockNodes[0].name);
+        }
+    </script>
+</body>
+</html>
